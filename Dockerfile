@@ -1,12 +1,15 @@
 FROM python:3.11-slim
 
-# ffmpeg 설치
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# 시스템 패키지 설치
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # 작업 디렉토리
 WORKDIR /app
 
-# 의존성 설치
+# 의존성 먼저 설치 (캐싱 활용)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -14,10 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 디렉토리 생성
-RUN mkdir -p downloads media
+RUN mkdir -p /app/downloads /app/media /tmp/downloads /tmp/media
 
-# Railway uses PORT env variable
-ENV PORT=8080
+# 시작 스크립트 복사 및 권한 설정
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-# 실행 - shell form을 사용하여 $PORT 확장
-CMD ["/bin/sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 300"]
+# 실행
+CMD ["/start.sh"]

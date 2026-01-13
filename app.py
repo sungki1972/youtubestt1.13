@@ -33,13 +33,22 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 APP_URL = os.environ.get("RAILWAY_PUBLIC_DOMAIN", os.environ.get("APP_URL", "localhost:9899"))
 PORT = int(os.environ.get("PORT", 9899))
 
-# 다운로드 디렉토리 (Railway에서는 /tmp 사용)
-DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(current_dir, "downloads"))
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# 다운로드 디렉토리 설정
+# Railway에서는 /tmp 사용 (ephemeral storage)
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    DOWNLOAD_DIR = "/tmp/downloads"
+    MEDIA_DIR = "/tmp/media"
+else:
+    DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(current_dir, "downloads"))
+    MEDIA_DIR = os.environ.get("MEDIA_DIR", os.path.join(current_dir, "media"))
 
-# 미디어 파일 저장 디렉토리
-MEDIA_DIR = os.environ.get("MEDIA_DIR", os.path.join(current_dir, "media"))
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(MEDIA_DIR, exist_ok=True)
+
+print(f"[Config] DOWNLOAD_DIR: {DOWNLOAD_DIR}")
+print(f"[Config] MEDIA_DIR: {MEDIA_DIR}")
+print(f"[Config] SUPABASE_URL: {'SET' if SUPABASE_URL else 'NOT SET'}")
+print(f"[Config] OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
 
 # 업로드 허용 확장자
 ALLOWED_EXTENSIONS = {'mp4', 'webm', 'mkv', 'avi', 'mov', 'm4a', 'mp3', 'wav'}
