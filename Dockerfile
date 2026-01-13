@@ -16,8 +16,8 @@ COPY . .
 # 디렉토리 생성
 RUN mkdir -p downloads media
 
-# 포트 노출
-EXPOSE 8080
+# Railway uses PORT env variable
+ENV PORT=8080
 
-# 실행
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "300"]
+# 실행 - Railway가 $PORT를 주입함
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 300

@@ -48,11 +48,25 @@ def allowed_file(filename):
     """허용된 파일 확장자인지 확인"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Supabase 클라이언트 초기화
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Supabase 클라이언트 초기화 (지연 초기화)
+supabase = None
+openai_client = None
 
-# OpenAI 클라이언트 초기화
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+def get_supabase():
+    global supabase
+    if supabase is None:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise Exception("SUPABASE_URL and SUPABASE_KEY environment variables are required")
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return supabase
+
+def get_openai():
+    global openai_client
+    if openai_client is None:
+        if not OPENAI_API_KEY:
+            raise Exception("OPENAI_API_KEY environment variable is required")
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    return openai_client
 
 # Flask 앱 초기화
 app = Flask(__name__)
@@ -101,7 +115,7 @@ def download_youtube_audio(url: str, output_path: str) -> str:
 def update_progress(record_id: str, progress: int, status: str = "processing"):
     """진행률 업데이트 헬퍼 함수"""
     try:
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "status": status,
             "progress": progress
         }).eq("id", record_id).execute()
@@ -158,7 +172,7 @@ def transcribe_with_openai(audio_path: str, language: str = "ko") -> str:
 
     if file_size <= max_size:
         with open(audio_path, "rb") as audio_file:
-            transcript = openai_client.audio.transcriptions.create(
+            transcript = get_openai().audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 language=language,
@@ -185,7 +199,7 @@ def transcribe_with_openai(audio_path: str, language: str = "ko") -> str:
             chunk_path = small_chunk
 
         with open(chunk_path, "rb") as audio_file:
-            transcript = openai_client.audio.transcriptions.create(
+            transcript = get_openai().audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 language=language,
@@ -208,7 +222,7 @@ def process_youtube_stt_task(record_id: str, youtube_url: str):
 
         # 1. YouTube 제목 가져오기
         title = get_youtube_title(youtube_url)
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "title": title,
             "progress": 10
         }).eq("id", record_id).execute()
@@ -236,7 +250,7 @@ def process_youtube_stt_task(record_id: str, youtube_url: str):
         update_progress(record_id, 95)
 
         # 5. 저장
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "subtitle": subtitle_text,
             "status": "completed",
             "progress": 100
@@ -260,7 +274,7 @@ def process_youtube_stt_task(record_id: str, youtube_url: str):
 
     except Exception as e:
         error_msg = str(e)
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "status": f"error: {error_msg[:200]}",
             "progress": 0
         }).eq("id", record_id).execute()
@@ -298,7 +312,7 @@ def process_file_stt_task(record_id: str, file_path: str, original_filename: str
         update_progress(record_id, 95)
 
         # 3. 저장
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "subtitle": subtitle_text,
             "status": "completed",
             "progress": 100
@@ -321,7 +335,7 @@ def process_file_stt_task(record_id: str, file_path: str, original_filename: str
 
     except Exception as e:
         error_msg = str(e)
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "status": f"error: {error_msg[:200]}",
             "progress": 0
         }).eq("id", record_id).execute()
@@ -361,7 +375,7 @@ def submit_youtube():
             return jsonify({"success": False, "error": "YouTube 링크를 입력해주세요."}), 400
 
         # Supabase에 레코드 생성
-        result = supabase.table("youtube_stt").insert({
+        result = get_supabase().table("youtube_stt").insert({
             "youtube_link": youtube_url,
             "status": "pending"
         }).execute()
@@ -411,7 +425,7 @@ def upload_file():
         shutil.copy(media_path, file_path)
 
         # Supabase에 레코드 생성
-        result = supabase.table("youtube_stt").insert({
+        result = get_supabase().table("youtube_stt").insert({
             "id": record_id,
             "youtube_link": f"/media/{saved_filename}",
             "title": original_filename,
@@ -437,7 +451,7 @@ def upload_file():
 def get_list():
     """목록 조회"""
     try:
-        result = supabase.table("youtube_stt").select("*").order("created_at", desc=True).execute()
+        result = get_supabase().table("youtube_stt").select("*").order("created_at", desc=True).execute()
         return jsonify({"success": True, "data": result.data})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -447,7 +461,7 @@ def get_list():
 def get_detail(record_id):
     """상세 조회"""
     try:
-        result = supabase.table("youtube_stt").select("*").eq("id", record_id).execute()
+        result = get_supabase().table("youtube_stt").select("*").eq("id", record_id).execute()
         if result.data:
             return jsonify({"success": True, "data": result.data[0]})
         return jsonify({"success": False, "error": "레코드를 찾을 수 없습니다."}), 404
@@ -459,7 +473,7 @@ def get_detail(record_id):
 def detail_page(record_id):
     """상세 페이지 (Telegram 링크용)"""
     try:
-        result = supabase.table("youtube_stt").select("*").eq("id", record_id).execute()
+        result = get_supabase().table("youtube_stt").select("*").eq("id", record_id).execute()
         if result.data:
             return render_template('detail.html', record=result.data[0])
         return "레코드를 찾을 수 없습니다.", 404
@@ -471,7 +485,7 @@ def detail_page(record_id):
 def delete_record(record_id):
     """레코드 삭제"""
     try:
-        supabase.table("youtube_stt").delete().eq("id", record_id).execute()
+        get_supabase().table("youtube_stt").delete().eq("id", record_id).execute()
         return jsonify({"success": True, "message": "삭제되었습니다."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -487,7 +501,7 @@ def update_record(record_id):
         if not title:
             return jsonify({"success": False, "error": "제목을 입력해주세요."}), 400
 
-        supabase.table("youtube_stt").update({
+        get_supabase().table("youtube_stt").update({
             "title": title
         }).eq("id", record_id).execute()
 
