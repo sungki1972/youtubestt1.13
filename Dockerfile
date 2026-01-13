@@ -19,5 +19,5 @@ RUN mkdir -p downloads media
 # Railway uses PORT env variable
 ENV PORT=8080
 
-# 실행 - Railway가 $PORT를 주입함
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 300
+# 실행 - shell form을 사용하여 $PORT 확장
+CMD ["/bin/sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT} --workers 2 --threads 4 --timeout 300"]
