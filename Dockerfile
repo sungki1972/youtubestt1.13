@@ -9,7 +9,7 @@ RUN apt-get update && \
 # 작업 디렉토리
 WORKDIR /app
 
-# 의존성 먼저 설치 (캐싱 활용)
+# 의존성 먼저 설치 (v2 - 캐시 무효화)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
